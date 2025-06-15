@@ -1,0 +1,69 @@
+/* ThreeADay waybar module styles */
+
+#threeaday {
+    background-color: #313244;
+    color: #cdd6f4;
+    border-radius: 8px;
+    padding: 0 12px;
+    margin: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+#threeaday.normal {
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+#threeaday.empty {
+    background-color: #585b70;
+    color: #bac2de;
+}
+
+#threeaday.none {
+    background-color: #f38ba8;
+    color: #1e1e2e;
+}
+
+#threeaday.started {
+    background-color: #fab387;
+    color: #1e1e2e;
+}
+
+#threeaday.progress {
+    background-color: #f9e2af;
+    color: #1e1e2e;
+}
+
+#threeaday.achieved {
+    background-color: #a6e3a1;
+    color: #1e1e2e;
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+#threeaday.error,
+#threeaday.unknown {
+    background-color: #f38ba8;
+    color: #1e1e2e;
+}
+
+@keyframes glow {
+    from {
+        box-shadow: 0 0 5px #a6e3a1;
+    }
+    to {
+        box-shadow: 0 0 15px #a6e3a1, 0 0 20px #a6e3a1;
+    }
+}
+
+/* Hover effects */
+#threeaday:hover {
+    background-color: #45475a;
+    transition: background-color 0.2s ease;
+}
+
+#threeaday.achieved:hover {
+    background-color: #94e2d5;
+    transition: background-color 0.2s ease;
+}

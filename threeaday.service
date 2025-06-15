@@ -1,0 +1,13 @@
+[Unit]
+Description=ThreeADay momentum tracking service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.cargo/bin/threeaday-service
+Restart=always
+RestartSec=10
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target

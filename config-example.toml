@@ -1,0 +1,14 @@
+# ThreeADay Service Configuration
+# This file will be automatically created at ~/.config/threeaday/config.toml
+
+# How often to send reminder notifications (in minutes)
+# Examples: 15 = every 15 minutes, 30 = every 30 minutes, 60 = every hour
+reminder_interval_minutes = 45
+
+# Daily reset time in 24-hour format (HH:MM)
+# When the new day starts and counters reset
+daily_reset_time = "06:00"
+
+# Maximum number of reminders per day
+# Prevents all-day spam on busy days
+max_reminders_per_day = 8

@@ -1,0 +1,16 @@
+{
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["threeaday", "pulseaudio", "network", "battery"],
+    
+    "threeaday": {
+        "format": "{}",
+        "return-type": "json",
+        "exec": "/path/to/threeaday/waybar-module.sh status",
+        "on-click": "/path/to/threeaday/waybar-module.sh click left",
+        "on-click-right": "/path/to/threeaday/waybar-module.sh click right",
+        "on-click-middle": "/path/to/threeaday/waybar-module.sh click middle",
+        "interval": 30,
+        "tooltip": true
+    }
+}
