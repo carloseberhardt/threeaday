@@ -4,10 +4,11 @@ use anyhow::Result;
 use chrono::{Duration, Local, NaiveTime};
 use db::Database;
 use directories::ProjectDirs;
-use notify_rust::Notification;
+use notify_rust::{Notification, Urgency};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Duration as StdDuration;
 use tokio::time::interval;
 
@@ -131,15 +132,19 @@ impl ServiceState {
             format!("🏃 Progress: {}/{} tasks completed. Keep going!", completed, total)
         };
 
+        // Play notification sound
+        self.play_notification_sound();
+
         Notification::new()
             .summary("ThreeADay")
             .body(&message)
-            .timeout(5000) // 5 second timeout
+            .urgency(Urgency::Critical)
+            .timeout(0) // Persistent notification
             .show()
             .map_err(|e| anyhow::anyhow!("Failed to send notification: {}", e))?;
 
         self.reminders_sent_today += 1;
-        println!("Sent reminder: {}", message);
+        println!("Sent persistent reminder: {}", message);
         
         Ok(())
     }
@@ -150,10 +155,14 @@ impl ServiceState {
         if completed >= 3 {
             let message = format!("🎯 Amazing! You've completed {} tasks today! Great momentum!", completed);
             
+            // Play achievement sound
+            self.play_notification_sound();
+            
             Notification::new()
                 .summary("ThreeADay - Goal Achieved!")
                 .body(&message)
-                .timeout(8000) // Longer timeout for achievements
+                .urgency(Urgency::Critical)
+                .timeout(0) // Persistent notification for achievements
                 .show()
                 .map_err(|e| anyhow::anyhow!("Failed to send achievement notification: {}", e))?;
             
@@ -181,15 +190,46 @@ impl ServiceState {
     }
 
     fn send_daily_reset_notification(&self) -> Result<()> {
+        // Play notification sound
+        self.play_notification_sound();
+
         Notification::new()
             .summary("ThreeADay - New Day!")
             .body("🌅 Ready for a fresh start? Add your first task for today!")
-            .timeout(6000)
+            .urgency(Urgency::Critical)
+            .timeout(0) // Persistent notification
             .show()
             .map_err(|e| anyhow::anyhow!("Failed to send daily reset notification: {}", e))?;
         
-        println!("Sent daily reset notification");
+        println!("Sent persistent daily reset notification");
         Ok(())
+    }
+
+    fn play_notification_sound(&self) {
+        // Try multiple common notification sounds, starting with system default
+        let sound_paths = [
+            "/usr/share/sounds/freedesktop/stereo/message-new-instant.oga",
+            "/usr/share/sounds/freedesktop/stereo/bell.oga",
+            "/usr/share/sounds/alarms/Oxygen-Sys-App-Message.ogg",
+            "/usr/share/sounds/ubuntu/stereo/message-new-instant.ogg",
+            "/usr/share/sounds/generic/click.wav",
+        ];
+
+        for sound_path in &sound_paths {
+            if std::path::Path::new(sound_path).exists() {
+                // Try paplay first (PulseAudio)
+                if let Ok(_) = Command::new("paplay").arg(sound_path).output() {
+                    return;
+                }
+                // Fallback to aplay (ALSA)
+                if let Ok(_) = Command::new("aplay").arg(sound_path).output() {
+                    return;
+                }
+            }
+        }
+
+        // Final fallback: system bell
+        let _ = Command::new("bash").arg("-c").arg(r"echo -e '\a'").output();
     }
 }
 
