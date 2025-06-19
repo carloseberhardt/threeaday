@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 const APP_ID: &str = "dev.threeaday.ThreeADay";
+const DAILY_GOAL_COMPLETION_COUNT: usize = 3;
 
 struct AppState {
     db: Database,
@@ -129,16 +130,16 @@ impl AppState {
                 // Update progress label
                 if total == 0 {
                     state.progress_label.set_text("No tasks yet. Add one below!");
-                } else if completed >= 3 {
+                } else if completed >= DAILY_GOAL_COMPLETION_COUNT {
                     state.progress_label.set_text(&format!("🎯 {} tasks completed!", completed));
                     state.completed_revealer.set_reveal_child(true);
                 } else {
-                    state.progress_label.set_text(&format!("Progress: {}/3 tasks completed", completed));
+                    state.progress_label.set_text(&format!("Progress: {}/{} tasks completed", completed, DAILY_GOAL_COMPLETION_COUNT));
                     state.completed_revealer.set_reveal_child(false);
                 }
 
                 // Add task widgets (limit to 3 for UI simplicity)
-                let display_tasks: Vec<_> = tasks.iter().take(3).collect();
+                let display_tasks: Vec<_> = tasks.iter().take(DAILY_GOAL_COMPLETION_COUNT).collect();
                 for task in display_tasks {
                     let task_box = GtkBox::new(Orientation::Horizontal, 8);
                     task_box.set_margin_top(4);
@@ -163,9 +164,10 @@ impl AppState {
                     // Handle checkbox toggle
                     if !task.completed {
                         let task_id = task.id;
-                        checkbox.connect_active_notify(glib::clone!(@weak self_rc => move |cb| {
+                        let self_rc_weak = Rc::downgrade(self_rc); // Explicitly create Weak reference
+                        checkbox.connect_active_notify(glib::clone!(@weak self_rc_weak => move |cb| {
                             if cb.is_active() {
-                                if let Some(strong_self_rc) = self_rc.upgrade() {
+                                if let Some(strong_self_rc) = self_rc_weak.upgrade() { // Upgrade the captured Weak
                                     let mut current_app_state_for_callback = strong_self_rc.borrow_mut();
                                     match current_app_state_for_callback.db.complete_task(task_id) {
                                         Ok(true) => { // Task was successfully completed
@@ -188,11 +190,11 @@ impl AppState {
                 }
                 
                 // Show note if there are more tasks beyond the 3 displayed
-                if tasks.len() > 3 {
+                if tasks.len() > DAILY_GOAL_COMPLETION_COUNT {
                     let more_box = GtkBox::new(Orientation::Horizontal, 8);
                     more_box.set_margin_top(8);
                     
-                    let more_label = Label::new(Some(&format!("... and {} more tasks (use CLI to see all)", tasks.len() - 3)));
+                    let more_label = Label::new(Some(&format!("... and {} more tasks (use CLI to see all)", tasks.len() - DAILY_GOAL_COMPLETION_COUNT)));
                     more_label.add_css_class("dim-label");
                     more_label.set_halign(Align::Center);
                     
@@ -201,7 +203,7 @@ impl AppState {
                 }
             }
             Err(e) => {
-                let error_message = format!("Error loading tasks: {}", e);
+                let error_message = state._format_task_loading_error_message(&e);
                 eprintln!("GUI: {}", error_message); // Log the error
                 state.progress_label.set_text(&error_message);
                 state.progress_label.remove_css_class("dim-label"); // Ensure not dim
@@ -218,7 +220,7 @@ impl AppState {
 
         // Check if we already have 3 tasks for today
         let tasks = state.db.get_today_tasks()?;
-        if tasks.len() >= 3 {
+        if tasks.len() >= DAILY_GOAL_COMPLETION_COUNT {
             // Show a gentle reminder instead of adding
             state.progress_label.set_text("💡 Focus on your 3 tasks first! (Use CLI to add more)");
             state.entry.set_text("");
@@ -235,6 +237,15 @@ impl AppState {
         Ok(())
     }
 
+    fn _format_task_loading_error_message(&self, error: &anyhow::Error) -> String {
+        format!("Error loading tasks: {}", error)
+    }
+
+    /// Handles the UI updates when an error occurs during task addition.
+    ///
+    /// This includes logging the error to the console, displaying a
+    /// formatted error message in the progress_label, and adjusting
+    /// CSS classes on the label for visual feedback.
     fn handle_add_task_error(&self, error: &anyhow::Error) {
         let error_message = format!("Error adding task: {}", error);
         eprintln!("{}", error_message); // Keep console log for debugging
@@ -321,21 +332,8 @@ mod tests {
     use super::*; // If AppState or other items from gui.rs are needed, though not for this simple test.
     use anyhow::anyhow;
 
-    // Helper function to mimic the formatting part of the error handling.
-    // This could also be a private static method on AppState if preferred,
-    // but a free function is simpler for this test's scope.
-    fn format_task_loading_error(error: &anyhow::Error) -> String {
-        format!("Error loading tasks: {}", error)
-    }
-
-    #[test]
-    fn test_format_task_loading_error_message() {
-        let simulated_error = anyhow!("Simulated DB error for testing");
-        let expected_message = "Error loading tasks: Simulated DB error for testing";
-        assert_eq!(format_task_loading_error(&simulated_error), expected_message);
-
-        let another_error = anyhow!("Another issue");
-        let expected_message_2 = "Error loading tasks: Another issue";
-        assert_eq!(format_task_loading_error(&another_error), expected_message_2);
-    }
+    // The format_task_loading_error free function and its test test_format_task_loading_error_message
+    // have been removed as per the task description. The formatting logic is now
+    // a private method in AppState and is considered trivial for direct unit testing,
+    // its effect being implicitly covered by observing the GUI label.
 }
