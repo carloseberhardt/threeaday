@@ -163,24 +163,24 @@ impl AppState {
                     // Handle checkbox toggle
                     if !task.completed {
                         let task_id = task.id;
-                        checkbox.connect_active_notify(glib::clone!(@strong self_rc => move |cb| {
+                        checkbox.connect_active_notify(glib::clone!(@weak self_rc => move |cb| {
                             if cb.is_active() {
-                                let mut current_app_state_for_callback = self_rc.borrow_mut();
-                                match current_app_state_for_callback.db.complete_task(task_id) {
-                                    Ok(true) => { // Task was successfully completed
-                                        // Drop the current mutable borrow before calling refresh_tasks,
-                                        // as refresh_tasks will also need to borrow_mut().
-                                        drop(current_app_state_for_callback);
-                                        AppState::refresh_tasks(&self_rc);
+                                if let Some(strong_self_rc) = self_rc.upgrade() {
+                                    let mut current_app_state_for_callback = strong_self_rc.borrow_mut();
+                                    match current_app_state_for_callback.db.complete_task(task_id) {
+                                        Ok(true) => { // Task was successfully completed
+                                            drop(current_app_state_for_callback);
+                                            AppState::refresh_tasks(&strong_self_rc);
+                                        }
+                                        Ok(false) => {
+                                            // Task was already complete or not found
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Error completing task {} during callback: {}", task_id, e);
+                                        }
                                     }
-                                    Ok(false) => {
-                                        // Task was already complete or not found, log or ignore.
-                                        // eprintln!("Task {} already completed or not found during callback.", task_id);
-                                    }
-                                    Err(e) => {
-                                        eprintln!("Error completing task {} during callback: {}", task_id, e);
-                                        // In the next step, this error could be shown in the GUI.
-                                    }
+                                } else {
+                                    eprintln!("AppState dropped, checkbox callback for task_id {} will not run.", task_id);
                                 }
                             }
                         }));
@@ -201,7 +201,11 @@ impl AppState {
                 }
             }
             Err(e) => {
-                state.progress_label.set_text(&format!("Error loading tasks: {}", e));
+                let error_message = format!("Error loading tasks: {}", e);
+                eprintln!("GUI: {}", error_message); // Log the error
+                state.progress_label.set_text(&error_message);
+                state.progress_label.remove_css_class("dim-label"); // Ensure not dim
+                state.progress_label.add_css_class("error-label"); // Consistent error styling
             }
         }
     }
@@ -230,6 +234,14 @@ impl AppState {
         
         Ok(())
     }
+
+    fn handle_add_task_error(&self, error: &anyhow::Error) {
+        let error_message = format!("Error adding task: {}", error);
+        eprintln!("{}", error_message); // Keep console log for debugging
+        self.progress_label.set_text(&error_message);
+        self.progress_label.remove_css_class("dim-label"); // Ensure not dim
+        self.progress_label.add_css_class("error-label"); // Example class
+    }
 }
 
 fn setup_callbacks(state: Rc<RefCell<AppState>>) {
@@ -240,12 +252,7 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     add_button.connect_clicked(glib::clone!(@strong state, @strong entry_clone => move |_| {
         let text = entry_clone.text().to_string();
         if let Err(e) = AppState::add_task(&state, &text) {
-            let error_message = format!("Error adding task: {}", e);
-            eprintln!("{}", error_message); // Keep console log for debugging
-            state.borrow().progress_label.set_text(&error_message);
-            // Optionally, add a CSS class to indicate it's an error
-            state.borrow().progress_label.remove_css_class("dim-label"); // Ensure not dim
-            state.borrow().progress_label.add_css_class("error-label"); // Example class
+            state.borrow().handle_add_task_error(&e);
         }
     }));
 
@@ -254,12 +261,7 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     entry.connect_activate(glib::clone!(@strong state => move |entry| {
         let text = entry.text().to_string();
         if let Err(e) = AppState::add_task(&state, &text) {
-            let error_message = format!("Error adding task: {}", e);
-            eprintln!("{}", error_message); // Keep console log for debugging
-            state.borrow().progress_label.set_text(&error_message);
-            // Optionally, add a CSS class to indicate it's an error
-            state.borrow().progress_label.remove_css_class("dim-label"); // Ensure not dim
-            state.borrow().progress_label.add_css_class("error-label"); // Example class
+            state.borrow().handle_add_task_error(&e);
         }
     }));
 
@@ -312,4 +314,28 @@ fn main() -> glib::ExitCode {
     });
 
     app.run()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // If AppState or other items from gui.rs are needed, though not for this simple test.
+    use anyhow::anyhow;
+
+    // Helper function to mimic the formatting part of the error handling.
+    // This could also be a private static method on AppState if preferred,
+    // but a free function is simpler for this test's scope.
+    fn format_task_loading_error(error: &anyhow::Error) -> String {
+        format!("Error loading tasks: {}", error)
+    }
+
+    #[test]
+    fn test_format_task_loading_error_message() {
+        let simulated_error = anyhow!("Simulated DB error for testing");
+        let expected_message = "Error loading tasks: Simulated DB error for testing";
+        assert_eq!(format_task_loading_error(&simulated_error), expected_message);
+
+        let another_error = anyhow!("Another issue");
+        let expected_message_2 = "Error loading tasks: Another issue";
+        assert_eq!(format_task_loading_error(&another_error), expected_message_2);
+    }
 }
