@@ -113,27 +113,28 @@ impl AppState {
         Ok(state)
     }
 
-    fn refresh_tasks(&mut self) {
+    fn refresh_tasks(self_rc: &Rc<RefCell<Self>>) {
+        let mut state = self_rc.borrow_mut();
         // Clear existing tasks
-        while let Some(child) = self.task_list.first_child() {
-            self.task_list.remove(&child);
+        while let Some(child) = state.task_list.first_child() {
+            state.task_list.remove(&child);
         }
 
         // Load tasks from database
-        match self.db.get_today_tasks() {
+        match state.db.get_today_tasks() {
             Ok(tasks) => {
                 let completed = tasks.iter().filter(|t| t.completed).count();
                 let total = tasks.len();
 
                 // Update progress label
                 if total == 0 {
-                    self.progress_label.set_text("No tasks yet. Add one below!");
+                    state.progress_label.set_text("No tasks yet. Add one below!");
                 } else if completed >= 3 {
-                    self.progress_label.set_text(&format!("🎯 {} tasks completed!", completed));
-                    self.completed_revealer.set_reveal_child(true);
+                    state.progress_label.set_text(&format!("🎯 {} tasks completed!", completed));
+                    state.completed_revealer.set_reveal_child(true);
                 } else {
-                    self.progress_label.set_text(&format!("Progress: {}/3 tasks completed", completed));
-                    self.completed_revealer.set_reveal_child(false);
+                    state.progress_label.set_text(&format!("Progress: {}/3 tasks completed", completed));
+                    state.completed_revealer.set_reveal_child(false);
                 }
 
                 // Add task widgets (limit to 3 for UI simplicity)
@@ -157,20 +158,32 @@ impl AppState {
                     task_box.append(&checkbox);
                     task_box.append(&task_label);
                     
-                    self.task_list.append(&task_box);
+                    state.task_list.append(&task_box);
 
-                    // Handle checkbox toggle - for now just mark complete
+                    // Handle checkbox toggle
                     if !task.completed {
                         let task_id = task.id;
-                        checkbox.connect_active_notify(move |cb| {
+                        checkbox.connect_active_notify(glib::clone!(@strong self_rc => move |cb| {
                             if cb.is_active() {
-                                if let Ok(mut db) = Database::new() {
-                                    let _ = db.complete_task(task_id);
-                                    // For now, user needs to restart app to see changes
-                                    // In a full implementation, we'd use a more sophisticated refresh mechanism
+                                let mut current_app_state_for_callback = self_rc.borrow_mut();
+                                match current_app_state_for_callback.db.complete_task(task_id) {
+                                    Ok(true) => { // Task was successfully completed
+                                        // Drop the current mutable borrow before calling refresh_tasks,
+                                        // as refresh_tasks will also need to borrow_mut().
+                                        drop(current_app_state_for_callback);
+                                        AppState::refresh_tasks(&self_rc);
+                                    }
+                                    Ok(false) => {
+                                        // Task was already complete or not found, log or ignore.
+                                        // eprintln!("Task {} already completed or not found during callback.", task_id);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Error completing task {} during callback: {}", task_id, e);
+                                        // In the next step, this error could be shown in the GUI.
+                                    }
                                 }
                             }
-                        });
+                        }));
                     }
                 }
                 
@@ -184,32 +197,36 @@ impl AppState {
                     more_label.set_halign(Align::Center);
                     
                     more_box.append(&more_label);
-                    self.task_list.append(&more_box);
+                    state.task_list.append(&more_box);
                 }
             }
             Err(e) => {
-                self.progress_label.set_text(&format!("Error loading tasks: {}", e));
+                state.progress_label.set_text(&format!("Error loading tasks: {}", e));
             }
         }
     }
 
-    fn add_task(&mut self, text: &str) -> Result<(), anyhow::Error> {
+    fn add_task(self_rc: &Rc<RefCell<Self>>, text: &str) -> Result<(), anyhow::Error> {
+        let mut state = self_rc.borrow_mut();
         if text.trim().is_empty() {
             return Ok(());
         }
 
         // Check if we already have 3 tasks for today
-        let tasks = self.db.get_today_tasks()?;
+        let tasks = state.db.get_today_tasks()?;
         if tasks.len() >= 3 {
             // Show a gentle reminder instead of adding
-            self.progress_label.set_text("💡 Focus on your 3 tasks first! (Use CLI to add more)");
-            self.entry.set_text("");
+            state.progress_label.set_text("💡 Focus on your 3 tasks first! (Use CLI to add more)");
+            state.entry.set_text("");
             return Ok(());
         }
 
-        self.db.add_task(text.trim())?;
-        self.entry.set_text("");
-        self.refresh_tasks();
+        state.db.add_task(text.trim())?;
+        state.entry.set_text("");
+        // Release the mutable borrow before calling refresh_tasks,
+        // as refresh_tasks will also need to borrow_mut().
+        drop(state);
+        AppState::refresh_tasks(self_rc);
         
         Ok(())
     }
@@ -222,8 +239,13 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     
     add_button.connect_clicked(glib::clone!(@strong state, @strong entry_clone => move |_| {
         let text = entry_clone.text().to_string();
-        if let Err(e) = state.borrow_mut().add_task(&text) {
-            eprintln!("Error adding task: {}", e);
+        if let Err(e) = AppState::add_task(&state, &text) {
+            let error_message = format!("Error adding task: {}", e);
+            eprintln!("{}", error_message); // Keep console log for debugging
+            state.borrow().progress_label.set_text(&error_message);
+            // Optionally, add a CSS class to indicate it's an error
+            state.borrow().progress_label.remove_css_class("dim-label"); // Ensure not dim
+            state.borrow().progress_label.add_css_class("error-label"); // Example class
         }
     }));
 
@@ -231,8 +253,13 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     let entry = state.borrow().entry.clone();
     entry.connect_activate(glib::clone!(@strong state => move |entry| {
         let text = entry.text().to_string();
-        if let Err(e) = state.borrow_mut().add_task(&text) {
-            eprintln!("Error adding task: {}", e);
+        if let Err(e) = AppState::add_task(&state, &text) {
+            let error_message = format!("Error adding task: {}", e);
+            eprintln!("{}", error_message); // Keep console log for debugging
+            state.borrow().progress_label.set_text(&error_message);
+            // Optionally, add a CSS class to indicate it's an error
+            state.borrow().progress_label.remove_css_class("dim-label"); // Ensure not dim
+            state.borrow().progress_label.add_css_class("error-label"); // Example class
         }
     }));
 
@@ -263,7 +290,7 @@ fn build_ui(app: &Application) -> Result<(), anyhow::Error> {
     setup_callbacks(state.clone());
     
     // Initial task refresh
-    state.borrow_mut().refresh_tasks();
+    AppState::refresh_tasks(&state);
     
     // Show window and give it focus
     let window = &state.borrow().window;
