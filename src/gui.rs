@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 const APP_ID: &str = "dev.threeaday.ThreeADay";
+const DAILY_GOAL_COMPLETION_COUNT: usize = 3;
 
 struct AppState {
     db: Database,
@@ -113,31 +114,32 @@ impl AppState {
         Ok(state)
     }
 
-    fn refresh_tasks(&mut self) {
+    fn refresh_tasks(self_rc: &Rc<RefCell<Self>>) {
+        let mut state = self_rc.borrow_mut();
         // Clear existing tasks
-        while let Some(child) = self.task_list.first_child() {
-            self.task_list.remove(&child);
+        while let Some(child) = state.task_list.first_child() {
+            state.task_list.remove(&child);
         }
 
         // Load tasks from database
-        match self.db.get_today_tasks() {
+        match state.db.get_today_tasks() {
             Ok(tasks) => {
                 let completed = tasks.iter().filter(|t| t.completed).count();
                 let total = tasks.len();
 
                 // Update progress label
                 if total == 0 {
-                    self.progress_label.set_text("No tasks yet. Add one below!");
-                } else if completed >= 3 {
-                    self.progress_label.set_text(&format!("🎯 {} tasks completed!", completed));
-                    self.completed_revealer.set_reveal_child(true);
+                    state.progress_label.set_text("No tasks yet. Add one below!");
+                } else if completed >= DAILY_GOAL_COMPLETION_COUNT {
+                    state.progress_label.set_text(&format!("🎯 {} tasks completed!", completed));
+                    state.completed_revealer.set_reveal_child(true);
                 } else {
-                    self.progress_label.set_text(&format!("Progress: {}/3 tasks completed", completed));
-                    self.completed_revealer.set_reveal_child(false);
+                    state.progress_label.set_text(&format!("Progress: {}/{} tasks completed", completed, DAILY_GOAL_COMPLETION_COUNT));
+                    state.completed_revealer.set_reveal_child(false);
                 }
 
                 // Add task widgets (limit to 3 for UI simplicity)
-                let display_tasks: Vec<_> = tasks.iter().take(3).collect();
+                let display_tasks: Vec<_> = tasks.iter().take(DAILY_GOAL_COMPLETION_COUNT).collect();
                 for task in display_tasks {
                     let task_box = GtkBox::new(Orientation::Horizontal, 8);
                     task_box.set_margin_top(4);
@@ -157,61 +159,99 @@ impl AppState {
                     task_box.append(&checkbox);
                     task_box.append(&task_label);
                     
-                    self.task_list.append(&task_box);
+                    state.task_list.append(&task_box);
 
-                    // Handle checkbox toggle - for now just mark complete
+                    // Handle checkbox toggle
                     if !task.completed {
                         let task_id = task.id;
-                        checkbox.connect_active_notify(move |cb| {
+                        let self_rc_weak = Rc::downgrade(self_rc); // Explicitly create Weak reference
+                        checkbox.connect_active_notify(glib::clone!(@weak self_rc_weak => move |cb| {
                             if cb.is_active() {
-                                if let Ok(mut db) = Database::new() {
-                                    let _ = db.complete_task(task_id);
-                                    // For now, user needs to restart app to see changes
-                                    // In a full implementation, we'd use a more sophisticated refresh mechanism
+                                if let Some(strong_self_rc) = self_rc_weak.upgrade() { // Upgrade the captured Weak
+                                    let mut current_app_state_for_callback = strong_self_rc.borrow_mut();
+                                    match current_app_state_for_callback.db.complete_task(task_id) {
+                                        Ok(true) => { // Task was successfully completed
+                                            drop(current_app_state_for_callback);
+                                            AppState::refresh_tasks(&strong_self_rc);
+                                        }
+                                        Ok(false) => {
+                                            // Task was already complete or not found
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Error completing task {} during callback: {}", task_id, e);
+                                        }
+                                    }
+                                } else {
+                                    eprintln!("AppState dropped, checkbox callback for task_id {} will not run.", task_id);
                                 }
                             }
-                        });
+                        }));
                     }
                 }
                 
                 // Show note if there are more tasks beyond the 3 displayed
-                if tasks.len() > 3 {
+                if tasks.len() > DAILY_GOAL_COMPLETION_COUNT {
                     let more_box = GtkBox::new(Orientation::Horizontal, 8);
                     more_box.set_margin_top(8);
                     
-                    let more_label = Label::new(Some(&format!("... and {} more tasks (use CLI to see all)", tasks.len() - 3)));
+                    let more_label = Label::new(Some(&format!("... and {} more tasks (use CLI to see all)", tasks.len() - DAILY_GOAL_COMPLETION_COUNT)));
                     more_label.add_css_class("dim-label");
                     more_label.set_halign(Align::Center);
                     
                     more_box.append(&more_label);
-                    self.task_list.append(&more_box);
+                    state.task_list.append(&more_box);
                 }
             }
             Err(e) => {
-                self.progress_label.set_text(&format!("Error loading tasks: {}", e));
+                let error_message = state._format_task_loading_error_message(&e);
+                eprintln!("GUI: {}", error_message); // Log the error
+                state.progress_label.set_text(&error_message);
+                state.progress_label.remove_css_class("dim-label"); // Ensure not dim
+                state.progress_label.add_css_class("error-label"); // Consistent error styling
             }
         }
     }
 
-    fn add_task(&mut self, text: &str) -> Result<(), anyhow::Error> {
+    fn add_task(self_rc: &Rc<RefCell<Self>>, text: &str) -> Result<(), anyhow::Error> {
+        let mut state = self_rc.borrow_mut();
         if text.trim().is_empty() {
             return Ok(());
         }
 
         // Check if we already have 3 tasks for today
-        let tasks = self.db.get_today_tasks()?;
-        if tasks.len() >= 3 {
+        let tasks = state.db.get_today_tasks()?;
+        if tasks.len() >= DAILY_GOAL_COMPLETION_COUNT {
             // Show a gentle reminder instead of adding
-            self.progress_label.set_text("💡 Focus on your 3 tasks first! (Use CLI to add more)");
-            self.entry.set_text("");
+            state.progress_label.set_text("💡 Focus on your 3 tasks first! (Use CLI to add more)");
+            state.entry.set_text("");
             return Ok(());
         }
 
-        self.db.add_task(text.trim())?;
-        self.entry.set_text("");
-        self.refresh_tasks();
+        state.db.add_task(text.trim())?;
+        state.entry.set_text("");
+        // Release the mutable borrow before calling refresh_tasks,
+        // as refresh_tasks will also need to borrow_mut().
+        drop(state);
+        AppState::refresh_tasks(self_rc);
         
         Ok(())
+    }
+
+    fn _format_task_loading_error_message(&self, error: &anyhow::Error) -> String {
+        format!("Error loading tasks: {}", error)
+    }
+
+    /// Handles the UI updates when an error occurs during task addition.
+    ///
+    /// This includes logging the error to the console, displaying a
+    /// formatted error message in the progress_label, and adjusting
+    /// CSS classes on the label for visual feedback.
+    fn handle_add_task_error(&self, error: &anyhow::Error) {
+        let error_message = format!("Error adding task: {}", error);
+        eprintln!("{}", error_message); // Keep console log for debugging
+        self.progress_label.set_text(&error_message);
+        self.progress_label.remove_css_class("dim-label"); // Ensure not dim
+        self.progress_label.add_css_class("error-label"); // Example class
     }
 }
 
@@ -222,8 +262,8 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     
     add_button.connect_clicked(glib::clone!(@strong state, @strong entry_clone => move |_| {
         let text = entry_clone.text().to_string();
-        if let Err(e) = state.borrow_mut().add_task(&text) {
-            eprintln!("Error adding task: {}", e);
+        if let Err(e) = AppState::add_task(&state, &text) {
+            state.borrow().handle_add_task_error(&e);
         }
     }));
 
@@ -231,8 +271,8 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     let entry = state.borrow().entry.clone();
     entry.connect_activate(glib::clone!(@strong state => move |entry| {
         let text = entry.text().to_string();
-        if let Err(e) = state.borrow_mut().add_task(&text) {
-            eprintln!("Error adding task: {}", e);
+        if let Err(e) = AppState::add_task(&state, &text) {
+            state.borrow().handle_add_task_error(&e);
         }
     }));
 
@@ -263,7 +303,7 @@ fn build_ui(app: &Application) -> Result<(), anyhow::Error> {
     setup_callbacks(state.clone());
     
     // Initial task refresh
-    state.borrow_mut().refresh_tasks();
+    AppState::refresh_tasks(&state);
     
     // Show window and give it focus
     let window = &state.borrow().window;
@@ -285,4 +325,15 @@ fn main() -> glib::ExitCode {
     });
 
     app.run()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // If AppState or other items from gui.rs are needed, though not for this simple test.
+    use anyhow::anyhow;
+
+    // The format_task_loading_error free function and its test test_format_task_loading_error_message
+    // have been removed as per the task description. The formatting logic is now
+    // a private method in AppState and is considered trivial for direct unit testing,
+    // its effect being implicitly covered by observing the GUI label.
 }
