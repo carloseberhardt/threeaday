@@ -47,3 +47,5 @@ Thumbs.db
 /perf.data*
 /cachegrind.out*
 EOF < /dev/null
+
+.serena

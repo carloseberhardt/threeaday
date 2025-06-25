@@ -2,13 +2,28 @@
 
 # ThreeADay waybar module
 # Shows task progress and allows clicking to open GUI
+# 
+# Expand PATH to include common user binary locations
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:/usr/local/bin:$PATH"
 
 get_status() {
     # Use the CLI to get status, parse the output
-    local output=$(threeaday status 2>/dev/null)
+    # Add retry logic for startup timing issues
+    local output
+    local attempts=0
+    local max_attempts=3
     
-    if [[ $? -ne 0 ]]; then
-        echo '{"text": "❌", "tooltip": "ThreeADay: Error getting status", "class": "error"}'
+    while [[ $attempts -lt $max_attempts ]]; do
+        output=$(threeaday status 2>/dev/null)
+        if [[ $? -eq 0 ]]; then
+            break
+        fi
+        ((attempts++))
+        [[ $attempts -lt $max_attempts ]] && sleep 1
+    done
+    
+    if [[ $attempts -eq $max_attempts ]]; then
+        echo '{"text": "📋 ?", "tooltip": "ThreeADay: Starting up... (retry in a moment)", "class": "startup"}'
         return
     fi
     
