@@ -1,0 +1,20 @@
+[package]
+name = "threeaday-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "threeaday-gui"
+path = "src/main.rs"
+
+[dependencies]
+threeaday-core = { workspace = true }
+gtk4 = { workspace = true }
+glib = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

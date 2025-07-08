@@ -108,7 +108,7 @@ impl ServiceState {
         }
 
         match self.db.get_today_summary() {
-            Ok((completed, total)) => {
+            Ok((completed, _total)) => {
                 // Don't remind if goal is achieved
                 if completed >= 3 {
                     return false;
