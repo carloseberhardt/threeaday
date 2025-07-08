@@ -1,0 +1,22 @@
+[package]
+name = "threeaday-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "threeaday"
+path = "src/main.rs"
+
+[dependencies]
+threeaday-core = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+directories = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }

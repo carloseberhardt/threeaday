@@ -1,13 +1,11 @@
 mod db;
 
 use db::Database;
-use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{
     Application, ApplicationWindow, Button, CheckButton, Entry, Label, Orientation,
     Revealer, RevealerTransitionType, Align, Justification, EventControllerKey, gdk,
 };
-use gtk4 as gtk;
 use gtk4::Box as GtkBox;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -115,7 +113,7 @@ impl AppState {
     }
 
     fn refresh_tasks(self_rc: &Rc<RefCell<Self>>) {
-        let mut state = self_rc.borrow_mut();
+        let state = self_rc.borrow_mut();
         // Clear existing tasks
         while let Some(child) = state.task_list.first_child() {
             state.task_list.remove(&child);
@@ -165,7 +163,7 @@ impl AppState {
                     if !task.completed {
                         let task_id = task.id;
                         let self_rc_weak = Rc::downgrade(self_rc); // Explicitly create Weak reference
-                        checkbox.connect_active_notify(glib::clone!(@weak self_rc_weak => move |cb| {
+                        checkbox.connect_active_notify(move |cb| {
                             if cb.is_active() {
                                 if let Some(strong_self_rc) = self_rc_weak.upgrade() { // Upgrade the captured Weak
                                     let mut current_app_state_for_callback = strong_self_rc.borrow_mut();
@@ -185,7 +183,7 @@ impl AppState {
                                     eprintln!("AppState dropped, checkbox callback for task_id {} will not run.", task_id);
                                 }
                             }
-                        }));
+                        });
                     }
                 }
                 
@@ -260,21 +258,28 @@ fn setup_callbacks(state: Rc<RefCell<AppState>>) {
     let add_button = state.borrow().add_button.clone();
     let entry_clone = state.borrow().entry.clone();
     
-    add_button.connect_clicked(glib::clone!(@strong state, @strong entry_clone => move |_| {
-        let text = entry_clone.text().to_string();
-        if let Err(e) = AppState::add_task(&state, &text) {
-            state.borrow().handle_add_task_error(&e);
+    add_button.connect_clicked(glib::clone!(
+        #[strong] state,
+        #[strong] entry_clone,
+        move |_| {
+            let text = entry_clone.text().to_string();
+            if let Err(e) = AppState::add_task(&state, &text) {
+                state.borrow().handle_add_task_error(&e);
+            }
         }
-    }));
+    ));
 
     // Entry activation (Enter key)
     let entry = state.borrow().entry.clone();
-    entry.connect_activate(glib::clone!(@strong state => move |entry| {
-        let text = entry.text().to_string();
-        if let Err(e) = AppState::add_task(&state, &text) {
-            state.borrow().handle_add_task_error(&e);
+    entry.connect_activate(glib::clone!(
+        #[strong] state,
+        move |entry| {
+            let text = entry.text().to_string();
+            if let Err(e) = AppState::add_task(&state, &text) {
+                state.borrow().handle_add_task_error(&e);
+            }
         }
-    }));
+    ));
 
     // Window close behavior - allow closing
     let window = state.borrow().window.clone();

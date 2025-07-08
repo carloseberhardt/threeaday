@@ -1,21 +1,26 @@
-[workspace]
-members = [
-    "threeaday-core",
-    "threeaday-cli", 
-    "threeaday-gui",
-    "threeaday-service"
-]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "threeaday"
 version = "0.1.0"
 edition = "2021"
+default-run = "threeaday"
 license = "MIT"
 description = "A momentum-building app to break out of depression by completing 3 small tasks daily"
 authors = ["carlose"]
 
-[workspace.dependencies]
-# External dependencies
+[[bin]]
+name = "threeaday"
+path = "src/main.rs"
+
+[[bin]]
+name = "threeaday-service"
+path = "src/service.rs"
+
+[[bin]]
+name = "threeaday-gui"
+path = "src/gui.rs"
+
+
+[dependencies]
 clap = { version = "4.0", features = ["derive"] }
 rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -29,10 +34,7 @@ gtk4 = "0.9"
 glib = "0.20"
 toml = "0.8"
 
-# Dev dependencies
+[dev-dependencies]
 tempfile = "3.0"
 assert_cmd = "2.0"
 predicates = "3.0"
-
-# Internal dependencies
-threeaday-core = { path = "threeaday-core" }

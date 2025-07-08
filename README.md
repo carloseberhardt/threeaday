@@ -89,9 +89,12 @@ The GTK4 interface provides:
 
 ## Architecture
 
+ThreeADay is built as a Rust workspace with shared core library:
+
 - **CLI** (`threeaday`): Task management interface
 - **Service** (`threeaday-service`): Background notifications via mako
 - **GUI** (`threeaday-gui`): GTK4 interface  
+- **Core Library** (`threeaday-core`): Shared database, config, and utilities
 - **Database**: SQLite storage in `~/.local/share/threeaday/`
 - **Config**: TOML file in `~/.config/threeaday/config.toml`
 - **Waybar Module**: Shell script for status display
@@ -107,3 +110,22 @@ The GTK4 interface provides:
 - **Focus over features** - simple, effective momentum building
 
 Built with Rust for reliability and performance.
+
+## Development
+
+### Testing
+```bash
+# Run all tests
+cargo test
+
+# Run only core library tests  
+cargo test -p threeaday-core
+
+# Build release version
+cargo build --release
+```
+
+### Test Coverage
+- **42 comprehensive tests** covering database, configuration, utilities, and task management
+- **Integration tests** for CLI commands and workflows
+- **Isolated test environments** to prevent interference

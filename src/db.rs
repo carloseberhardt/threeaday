@@ -57,6 +57,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn add_task(&mut self, text: &str) -> Result<i64> {
         let today = Utc::now().date_naive();
         let _rows_affected = self.conn.execute(
@@ -88,6 +89,7 @@ impl Database {
         Ok(tasks)
     }
 
+    #[allow(dead_code)]
     pub fn complete_task(&mut self, id: i64) -> Result<bool> {
         let rows_affected = self.conn.execute(
             "UPDATE tasks SET completed = TRUE WHERE id = ?1 AND completed = FALSE",
@@ -96,6 +98,7 @@ impl Database {
         Ok(rows_affected > 0)
     }
 
+    #[allow(dead_code)]
     pub fn get_today_summary(&self) -> Result<(usize, usize)> {
         let tasks = self.get_today_tasks()?;
         let completed = tasks.iter().filter(|t| t.completed).count();
