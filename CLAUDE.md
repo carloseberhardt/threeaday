@@ -12,7 +12,7 @@ This file captures key design decisions, philosophy, and development context for
 1. **Small scope = achievable goals** - Never more than 3 daily tasks in focus
 2. **Fresh start daily** - No guilt from yesterday's failures, tasks don't carry over
 3. **Persistent but gentle encouragement** - Configurable reminders until goal achieved
-4. **Always present** - Waybar integration keeps progress visible
+4. **Always present** - Status bar integration keeps progress visible
 5. **Multiple interfaces** - CLI for power users, GUI for visual appeal, service for automation
 
 ## Architecture Decisions
@@ -65,19 +65,15 @@ This file captures key design decisions, philosophy, and development context for
 - **Persistent encouragement** - Will remind even with 0 tasks (changed from original)
 - **Achievement celebrations** - Special notifications for 3+ completions
 - **Daily reset notifications** - 6 AM "fresh start" encouragement
-- **mako integration** - Uses desktop notification system
+- **Desktop notifications** - Uses freedesktop notification system
 
-### Waybar Integration
-- **Always visible** - Progress always present in status bar
-- **Color coding**:
-  - Red (none/0): Need to start
-  - Orange (started/1): Making progress  
-  - Yellow (progress/2): Almost there
-  - Green (achieved/3+): Goal reached with glow animation
-- **Click actions**:
-  - Left: Open GUI
-  - Right: Show task list notification
-  - Middle: Quick add (rofi/zenity)
+### Status Bar Integration
+- **Always visible** - Progress always present via status bar widget
+- **Scriptable widgets** - Shell-script based modules for various bars
+  - Example provided for waybar, easily adaptable to others (e.g., quickshell, polybar)
+  - Polls `threeaday status` to get current progress
+  - Color coding: Red (0) → Orange (1) → Yellow (2) → Green (3+)
+  - Click actions: Open GUI, show tasks, quick add
 
 ## Technical Decisions
 
@@ -113,9 +109,9 @@ This file captures key design decisions, philosophy, and development context for
 - **Escape hatches** - Always a way to work around limits
 
 ## Installation & Distribution
-- **install.sh**: Automated setup for EndeavourOS/systemd
+- **install.sh**: Automated setup for Linux systems with systemd
 - **systemd user service**: Auto-start with desktop session
-- **waybar integration**: Separate module script
+- **Status bar widgets**: Optional modules for various bars (waybar, etc.)
 - **MIT license**: Maximum sharing freedom
 
 ## Future Considerations
@@ -139,8 +135,8 @@ This file captures key design decisions, philosophy, and development context for
 - Don't let it become another overwhelming todo app
 
 ## Development Environment
-- **Target platform**: EndeavourOS with Hyprland + Waybar
-- **Dependencies**: GTK4, mako notifications, systemd
+- **Target platform**: Linux with systemd (tested on EndeavourOS, niri, Hyprland)
+- **Dependencies**: GTK4, freedesktop notifications, systemd
 - **Build**: Standard Cargo workflow
 - **Testing**: `cargo test -- --test-threads=1` (database isolation)
 

@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn test_config_load_reads_existing_file() {
         let _temp_dir = setup_test_env();
-        
+
         // Create a custom config
         let custom_config = Config {
             reminder_interval_minutes: 30,
@@ -115,7 +115,7 @@ mod tests {
             max_reminders_per_day: 5,
         };
         custom_config.save().unwrap();
-        
+
         // Loading should read the custom values
         let loaded_config = Config::load().unwrap();
         assert_eq!(loaded_config.reminder_interval_minutes, 30);
@@ -126,17 +126,17 @@ mod tests {
     #[test]
     fn test_config_save_and_load_roundtrip() {
         let _temp_dir = setup_test_env();
-        
+
         let original_config = Config {
             reminder_interval_minutes: 120,
             daily_reset_time: "05:00".to_string(),
             max_reminders_per_day: 10,
         };
-        
+
         // Save and reload
         original_config.save().unwrap();
         let loaded_config = Config::load().unwrap();
-        
+
         assert_eq!(loaded_config.reminder_interval_minutes, 120);
         assert_eq!(loaded_config.daily_reset_time, "05:00");
         assert_eq!(loaded_config.max_reminders_per_day, 10);
