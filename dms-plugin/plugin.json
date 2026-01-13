@@ -1,0 +1,11 @@
+{
+    "id": "threeaday",
+    "name": "ThreeADay",
+    "description": "Task progress widget - complete 3 tasks daily to build momentum",
+    "version": "1.0.0",
+    "license": "MIT",
+    "author": "carlose",
+    "icon": "check_circle",
+    "component": "./ThreeADay.qml",
+    "permissions": []
+}

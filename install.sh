@@ -17,6 +17,15 @@ mkdir -p ~/.config/threeaday
 cp waybar-module.sh ~/.config/threeaday/
 chmod +x ~/.config/threeaday/waybar-module.sh
 
+# Install DankMaterialShell plugin if DMS is present
+if [ -d ~/.config/DankMaterialShell ]; then
+    echo "DankMaterialShell detected, installing plugin..."
+    mkdir -p ~/.config/DankMaterialShell/plugins/threeaday
+    cp dms-plugin/plugin.json ~/.config/DankMaterialShell/plugins/threeaday/
+    cp dms-plugin/ThreeADay.qml ~/.config/DankMaterialShell/plugins/threeaday/
+    DMS_INSTALLED=true
+fi
+
 # Install systemd user service
 mkdir -p ~/.config/systemd/user
 cp threeaday.service ~/.config/systemd/user/
@@ -53,4 +62,11 @@ echo "      \"interval\": 30,"
 echo "      \"tooltip\": true"
 echo "    }"
 echo ""
+if [ "$DMS_INSTALLED" = true ]; then
+    echo "DankMaterialShell plugin:"
+    echo "  Plugin installed to: ~/.config/DankMaterialShell/plugins/threeaday/"
+    echo "  To enable: DMS Settings → Plugins → Scan for Plugins → Enable ThreeADay"
+    echo "  Then restart DMS: dms restart"
+    echo ""
+fi
 echo "The service will automatically start reminders and handle daily resets."
